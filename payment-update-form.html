@@ -1,0 +1,980 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Payment Updation Automated Form — grayQuest</title>
+
+<!--
+  v3 changes:
+  - No dummy data. Right panel fetches from Apps Script web app.
+  - Right panel = compact rows: SPOC name | pending count | finance remark text
+    Filtered server-side to entries with Finance Remark = "Please check my remark".
+    Aggregated by SPOC.
+  - "Payment Received From" is now a dropdown (Institute / Parent).
+  - Optional "SPOC Remark" textarea added at the bottom of the form.
+  - Submission POSTs to Apps Script. Email persisted to localStorage.
+  - All endpoints configured via CONFIG block below.
+-->
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<style>
+/* ============================================================
+   DESIGN TOKENS
+   ============================================================ */
+:root{
+  --bg:        #F6F6F3;
+  --surface:   #FFFFFF;
+  --surface-2: #FAFAF7;
+  --border:    #E6E5E0;
+  --border-strong:#D2D1CB;
+  --text:      #14161A;
+  --text-muted:#6B6E76;
+  --text-soft: #9A9CA2;
+
+  --accent:    #4F46E5;
+  --accent-soft:#EEF0FE;
+  --accent-strong:#3F37C9;
+
+  --success:   #157F46;
+  --success-soft:#E5F4EC;
+  --warning:   #B25E09;
+  --warning-soft:#FBF1E2;
+  --danger:    #B42318;
+  --danger-soft:#FEECEB;
+
+  --radius-sm: 4px;
+  --radius:    6px;
+  --radius-lg: 10px;
+
+  --shadow-sm: 0 1px 2px rgba(20,22,26,0.04);
+  --shadow:    0 1px 3px rgba(20,22,26,0.06), 0 4px 12px rgba(20,22,26,0.04);
+
+  --font-sans: 'IBM Plex Sans', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+}
+
+/* ============================================================
+   RESET + BASE
+   ============================================================ */
+*,*::before,*::after{ box-sizing:border-box; }
+html,body{ margin:0; padding:0; }
+body{
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+button{ font-family: inherit; cursor: pointer; }
+input,select,textarea{ font-family: inherit; font-size: 14px; color: inherit; }
+a{ color: inherit; text-decoration: none; }
+
+/* ============================================================
+   TOP BAR
+   ============================================================ */
+.topbar{
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 12px 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+.brand{ display:flex; align-items:center; gap:10px; }
+.brand-mark{
+  width: 28px; height: 28px;
+  background: var(--accent);
+  border-radius: 50%;
+  display:flex; align-items:center; justify-content:center;
+  color: #fff; font-weight: 700; font-size: 13px;
+  letter-spacing: -0.02em;
+}
+.brand-name{
+  font-weight: 600;
+  font-size: 15px;
+  letter-spacing: -0.01em;
+}
+.brand-name span{ color: var(--accent); }
+
+.topbar-right{
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.btn-sheet{
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  background: var(--surface);
+  transition: background .12s ease, border-color .12s ease;
+}
+.btn-sheet:hover{ background: var(--surface-2); border-color: #B6B5AE; }
+.btn-sheet svg{ width: 14px; height: 14px; flex-shrink: 0; color: var(--text-muted); }
+.btn-sheet:hover svg{ color: var(--accent); }
+
+/* ============================================================
+   PAGE LAYOUT
+   ============================================================ */
+.page{
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 28px 32px 64px;
+}
+.page-header{ margin-bottom: 24px; }
+.page-title{
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  margin: 0 0 4px;
+}
+.page-subtitle{
+  font-size: 13px;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.layout{
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 380px;
+  gap: 24px;
+  align-items: start;
+}
+
+/* ============================================================
+   CARD SHELL
+   ============================================================ */
+.card{
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+.card-header{
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.card-title{
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0;
+  letter-spacing: -0.005em;
+}
+.card-subtitle{
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 2px 0 0;
+}
+.card-body{ padding: 24px; }
+
+/* ============================================================
+   FORM FIELDS
+   ============================================================ */
+.section-label{
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  font-weight: 600;
+  margin: 0 0 14px;
+}
+
+.field-grid{
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px 20px;
+}
+.field{ display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.field-full{ grid-column: 1 / -1; }
+
+.field-label{
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+}
+.field-label .req{ color: var(--danger); }
+.field-label .opt{
+  font-size: 11px;
+  color: var(--text-soft);
+  font-weight: 400;
+  letter-spacing: 0.01em;
+}
+.field-help{
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.4;
+  margin: 0;
+}
+
+.input, .select, .textarea{
+  appearance: none;
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  padding: 9px 12px;
+  color: var(--text);
+  transition: border-color .12s ease, box-shadow .12s ease, background .12s ease;
+}
+.input:hover, .select:hover, .textarea:hover{ border-color: #B6B5AE; }
+.input:focus, .select:focus, .textarea:focus{
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(79,70,229,0.12);
+}
+.input.mono{ font-family: var(--font-mono); font-size: 13px; letter-spacing: -0.01em; }
+
+.select{
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='none' stroke='%236B6E76' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round' d='M3 4.5L6 7.5L9 4.5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 32px;
+}
+.textarea{ min-height: 70px; resize: vertical; line-height: 1.5; }
+
+.field-error{
+  font-size: 12px;
+  color: var(--danger);
+  display: none;
+}
+.field.has-error .input,
+.field.has-error .select{
+  border-color: var(--danger);
+  background: var(--danger-soft);
+}
+.field.has-error .field-error{ display: block; }
+
+.input-prefix{
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.input-prefix .prefix{
+  position: absolute;
+  left: 12px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+.input-prefix .input{ padding-left: 28px; }
+
+/* ============================================================
+   FORM ACTIONS
+   ============================================================ */
+.actions{
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.actions-meta{ font-size: 12px; color: var(--text-muted); }
+.btn{
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 16px;
+  border-radius: var(--radius);
+  border: 1px solid transparent;
+  font-size: 13px;
+  font-weight: 500;
+  transition: background .12s ease, border-color .12s ease, color .12s ease;
+}
+.btn-primary{
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+.btn-primary:hover{ background: var(--accent-strong); border-color: var(--accent-strong); }
+.btn-primary:disabled{ background: #B5B2EC; border-color:#B5B2EC; cursor: not-allowed; }
+.btn-ghost{
+  background: transparent;
+  color: var(--text);
+  border-color: var(--border-strong);
+}
+.btn-ghost:hover{ background: var(--surface-2); }
+
+/* ============================================================
+   SIDEBAR — compact pending list
+   ============================================================ */
+.sidebar{
+  position: sticky;
+  top: 80px;
+  max-height: calc(100vh - 100px);
+  display: flex;
+  flex-direction: column;
+}
+.sidebar .card-body{ padding: 0; overflow-y: auto; }
+
+.refresh-btn{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px; height: 28px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--text-muted);
+  transition: background .12s, color .12s, transform .4s;
+}
+.refresh-btn:hover{ background: var(--surface-2); color: var(--text); }
+.refresh-btn.spinning svg{ animation: spin .8s linear infinite; }
+@keyframes spin{ to { transform: rotate(360deg); } }
+.refresh-btn svg{ width: 14px; height: 14px; }
+
+.empty-state, .error-state, .loading-state{
+  padding: 40px 24px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+.error-state{ color: var(--danger); }
+.error-state .retry{
+  display: inline-block;
+  margin-top: 8px;
+  color: var(--accent);
+  cursor: pointer;
+  font-weight: 500;
+}
+
+/* COMPACT row: name | count | remark — all on one line */
+.entry-row{
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) auto minmax(0, 1.4fr);
+  gap: 12px;
+  align-items: center;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+  transition: background .12s ease;
+}
+.entry-row:last-child{ border-bottom: none; }
+.entry-row:hover{ background: var(--surface-2); }
+.entry-row .name{
+  font-weight: 500;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.entry-row .count{
+  font-family: var(--font-mono);
+  font-size: 11px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.entry-row .remark{
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: right;
+}
+
+/* Header strip above the rows for clarity at high counts */
+.entry-table-head{
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) auto minmax(0, 1.4fr);
+  gap: 12px;
+  padding: 8px 16px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.entry-table-head .col-3{ text-align: right; }
+
+/* ============================================================
+   TOAST
+   ============================================================ */
+.toast-stack{
+  position: fixed;
+  top: 20px; right: 20px;
+  display: flex; flex-direction: column; gap: 8px;
+  z-index: 100;
+}
+.toast{
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--success);
+  box-shadow: var(--shadow);
+  border-radius: var(--radius);
+  padding: 12px 16px;
+  font-size: 13px;
+  min-width: 280px;
+  max-width: 380px;
+  animation: slidein .18s ease;
+}
+.toast.error{ border-left-color: var(--danger); }
+.toast .t-title{ font-weight: 600; }
+.toast .t-body{ color: var(--text-muted); font-size: 12px; margin-top: 2px; }
+@keyframes slidein{ from{ transform: translateX(8px); opacity:0; } to{ transform: translateX(0); opacity:1; } }
+
+/* ============================================================
+   CONFIG WARNING (shown only if SCRIPT_URL is unconfigured)
+   ============================================================ */
+.config-banner{
+  background: var(--warning-soft);
+  border: 1px solid #F5D7A8;
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  font-size: 12px;
+  color: var(--warning);
+  margin-bottom: 16px;
+  display: none;
+}
+.config-banner.show{ display: block; }
+.config-banner code{
+  background: rgba(0,0,0,0.06);
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+/* ============================================================
+   RESPONSIVE
+   ============================================================ */
+@media (max-width: 980px){
+  .layout{ grid-template-columns: 1fr; }
+  .sidebar{ position: static; max-height: none; }
+  .field-grid{ grid-template-columns: 1fr; }
+  .topbar{ padding: 12px 16px; flex-wrap: wrap; }
+  .page{ padding: 20px 16px 48px; }
+}
+</style>
+</head>
+
+<body>
+
+<!-- ============================================================
+     TOP BAR
+     ============================================================ -->
+<header class="topbar">
+  <div class="brand">
+    <div class="brand-mark">G</div>
+    <div class="brand-name">gray<span>Quest</span></div>
+  </div>
+
+  <div class="topbar-right">
+    <a class="btn-sheet" id="view-sheet-link" href="#" target="_blank" rel="noopener noreferrer">
+      <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+        <path d="M6 3H3.5A1.5 1.5 0 0 0 2 4.5v8A1.5 1.5 0 0 0 3.5 14h8A1.5 1.5 0 0 0 13 12.5V10"
+              stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+        <path d="M9 2h5v5M14 2 7.5 8.5"
+              stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      View Payment Sheet
+    </a>
+  </div>
+</header>
+
+<main class="page">
+
+  <!-- Shows only if config is missing — keeps people from being confused. -->
+  <div class="config-banner" id="config-banner">
+    <strong>Setup required:</strong> Update <code>CONFIG.SCRIPT_URL</code> and <code>CONFIG.SHEET_URL</code>
+    inside this HTML before deploying. See the README for steps.
+  </div>
+
+  <div class="page-header">
+    <h1 class="page-title">Payment Updation Automated Form</h1>
+    <p class="page-subtitle">Submit a payment update. Finance team reviews entries directly in the sheet.</p>
+  </div>
+
+  <div class="layout">
+
+    <!-- ========================================================
+         LEFT: SUBMISSION FORM
+         ======================================================== -->
+    <section class="card">
+      <div class="card-header">
+        <div>
+          <h2 class="card-title">New payment submission</h2>
+          <p class="card-subtitle">All fields marked * are required.</p>
+        </div>
+      </div>
+
+      <div class="card-body">
+        <form id="payment-form" novalidate>
+          <p class="section-label">Submission details</p>
+
+          <div class="field-grid">
+
+            <!-- SPOC Email -->
+            <div class="field">
+              <label class="field-label" for="email">SPOC Email <span class="req">*</span></label>
+              <input class="input" type="email" id="email" name="email" required
+                     placeholder="you@grayquest.com" autocomplete="email">
+              <p class="field-help">Your grayQuest email. Not the customer's.</p>
+              <span class="field-error" data-error-for="email">Enter a valid email address.</span>
+            </div>
+
+            <!-- Payment Date -->
+            <div class="field">
+              <label class="field-label" for="payment_date">Payment Date <span class="req">*</span></label>
+              <input class="input" type="date" id="payment_date" name="payment_date" required>
+              <p class="field-help">Date the money actually hit the account.</p>
+              <span class="field-error" data-error-for="payment_date">Select a valid date (not in future).</span>
+            </div>
+
+            <!-- App ID -->
+            <div class="field">
+              <label class="field-label" for="app_id">App ID <span class="req">*</span></label>
+              <input class="input mono" type="text" id="app_id" name="app_id" required
+                     placeholder="APP-2024-XXXXX" autocomplete="off">
+              <p class="field-help">Application ID from the lending system.</p>
+              <span class="field-error" data-error-for="app_id">App ID is required.</span>
+            </div>
+
+            <!-- Amount -->
+            <div class="field">
+              <label class="field-label" for="amount">Amount <span class="req">*</span></label>
+              <div class="input-prefix">
+                <span class="prefix">₹</span>
+                <input class="input mono" type="text" inputmode="decimal" id="amount" name="amount" required
+                       placeholder="0.00" autocomplete="off">
+              </div>
+              <p class="field-help">In INR, numbers only. No commas.</p>
+              <span class="field-error" data-error-for="amount">Enter an amount greater than 0.</span>
+            </div>
+
+            <!-- Method -->
+            <div class="field">
+              <label class="field-label" for="method">Method <span class="req">*</span></label>
+              <select class="select" id="method" name="method" required>
+                <option value="">Select method…</option>
+                <option>NEFT</option>
+                <option>UPI</option>
+                <option>IMPS</option>
+                <option>CHEQUE</option>
+                <option>CASH</option>
+                <option>RTGS</option>
+              </select>
+              <p class="field-help">How the payment was transferred.</p>
+              <span class="field-error" data-error-for="method">Select a payment method.</span>
+            </div>
+
+            <!-- UTR -->
+            <div class="field">
+              <label class="field-label" for="utr">UTR / Bank Reference <span class="req">*</span></label>
+              <input class="input mono" type="text" id="utr" name="utr" required
+                     placeholder="e.g. SBIN423456789012" autocomplete="off">
+              <p class="field-help">Bank reference number. For cheques, the cheque number.</p>
+              <span class="field-error" data-error-for="utr">Reference number is required.</span>
+            </div>
+
+            <!-- Payment Received From (now a dropdown) -->
+            <div class="field">
+              <label class="field-label" for="received_from">Payment Received From <span class="req">*</span></label>
+              <select class="select" id="received_from" name="received_from" required>
+                <option value="">Select source…</option>
+                <option>Institute</option>
+                <option>Parent</option>
+              </select>
+              <p class="field-help">Who sent the payment.</p>
+              <span class="field-error" data-error-for="received_from">Select an option.</span>
+            </div>
+
+            <!-- Source Account -->
+            <div class="field">
+              <label class="field-label" for="source">Source Account <span class="req">*</span></label>
+              <select class="select" id="source" name="source" required>
+                <option value="">Select account…</option>
+                <option>CURRENT A/C - 630</option>
+                <option>RAZORPAY AC 7616</option>
+                <option>2223002469792255</option>
+              </select>
+              <p class="field-help">Bank account where the money was credited.</p>
+              <span class="field-error" data-error-for="source">Select a source account.</span>
+            </div>
+
+            <!-- Payment Type — full width since values are long -->
+            <div class="field field-full">
+              <label class="field-label" for="payment_type">Payment Type <span class="req">*</span></label>
+              <select class="select" id="payment_type" name="payment_type" required>
+                <option value="">Select type…</option>
+                <option>DROPOUT</option>
+                <option>EMI</option>
+                <option>FORECLOSURE</option>
+                <option>POS ZERO HEMALI</option>
+                <option>BOUNCE CHARGES</option>
+                <option>MANADE CHARGES</option>
+                <option>EXTRA AMOUNT</option>
+                <option>EXCESS AMOUNT FROM INSTITUTE AS EMI</option>
+                <option>CONSIDER AS EMI</option>
+                <option>OTHER CHARGES</option>
+                <option>DOUBLE DISB CASE</option>
+              </select>
+              <p class="field-help">Category that best describes this payment.</p>
+              <span class="field-error" data-error-for="payment_type">Select a payment type.</span>
+            </div>
+
+            <!-- SPOC Remark — optional textarea -->
+            <div class="field field-full">
+              <label class="field-label" for="spoc_remark">
+                SPOC Remark <span class="opt">(optional)</span>
+              </label>
+              <textarea class="textarea" id="spoc_remark" name="spoc_remark"
+                        placeholder="Any context the finance team should know about this payment."></textarea>
+              <p class="field-help">You can also edit this column later directly in the sheet.</p>
+            </div>
+
+          </div>
+
+          <div class="actions">
+            <span class="actions-meta">Submission timestamps are logged for audit.</span>
+            <div style="display:flex; gap:8px;">
+              <button type="reset" class="btn btn-ghost">Reset</button>
+              <button type="submit" class="btn btn-primary" id="submit-btn">Submit payment update</button>
+            </div>
+          </div>
+
+        </form>
+      </div>
+    </section>
+
+    <!-- ========================================================
+         RIGHT: COMPACT PENDING LIST
+         ======================================================== -->
+    <aside class="card sidebar">
+      <div class="card-header">
+        <div>
+          <h2 class="card-title">Pending — Please check my remark</h2>
+          <p class="card-subtitle"><span id="entry-summary">Loading…</span></p>
+        </div>
+        <button class="refresh-btn" id="refresh-btn" title="Refresh" aria-label="Refresh">
+          <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M14 8a6 6 0 1 1-1.76-4.24L14 5.5M14 2v3.5h-3.5"
+                  stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Column headers shown only when we have data -->
+      <div class="entry-table-head" id="entry-table-head" style="display:none;">
+        <span>SPOC</span>
+        <span>Pending</span>
+        <span class="col-3">Finance Remark</span>
+      </div>
+
+      <div class="card-body" id="entries-body">
+        <!-- Rendered by JS -->
+        <div class="loading-state">Loading entries…</div>
+      </div>
+    </aside>
+
+  </div>
+
+</main>
+
+<div class="toast-stack" id="toast-stack"></div>
+
+<script>
+/* ============================================================
+   CONFIG — set these before deploying to GitHub Pages
+   ============================================================
+   SCRIPT_URL: the Apps Script web-app deployment URL
+               (Deploy > Manage deployments > Web app URL)
+               Must end with /exec.
+   SHEET_URL:  the Google Sheet URL (the /edit URL is fine — sheet
+               protection limits what employees can change).
+   ============================================================ */
+const CONFIG = {
+  SCRIPT_URL: 'https://script.google.com/a/macros/grayquest.com/s/AKfycbyFONd1drfSW4tdyCiEFb-A6qbEe5W2cccusaB2Lc7AeVGtHO46EmQpmzno9_VkX_g/exec',
+  SHEET_URL:  'https://docs.google.com/spreadsheets/d/12S3TK7CuwxtTuLW7mf65b3VlfTew9GkZKSz9CqvibR8/edit?gid=1474374026#gid=1474374026'
+};
+
+/* ============================================================
+   UTILITIES
+   ============================================================ */
+const $  = (sel, root = document) => root.querySelector(sel);
+const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
+
+function esc(s){
+  return String(s ?? '').replace(/[&<>"']/g, c => ({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+  }[c]));
+}
+
+function showToast({ title, body, type = 'success', timeout = 4000 }){
+  const stack = $('#toast-stack');
+  const el = document.createElement('div');
+  el.className = 'toast' + (type === 'error' ? ' error' : '');
+  el.innerHTML = `<div class="t-title">${esc(title)}</div>${body ? `<div class="t-body">${esc(body)}</div>` : ''}`;
+  stack.appendChild(el);
+  setTimeout(() => { el.style.opacity = 0; setTimeout(() => el.remove(), 200); }, timeout);
+}
+
+function isConfigured(){
+  return CONFIG.SCRIPT_URL && CONFIG.SCRIPT_URL.includes('script.google.com')
+      && CONFIG.SHEET_URL  && CONFIG.SHEET_URL.includes('docs.google.com');
+}
+
+/* ============================================================
+   FORM VALIDATION
+   ============================================================ */
+const VALIDATORS = {
+  email: v => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim()),
+  payment_date: v => {
+    if (!v) return false;
+    const d = new Date(v);
+    return !isNaN(d) && d <= new Date();
+  },
+  app_id: v => v.trim().length >= 3,
+  amount: v => {
+    const n = parseFloat(v);
+    return !isNaN(n) && n > 0;
+  },
+  method: v => v.length > 0,
+  utr: v => v.trim().length >= 4,
+  received_from: v => v.length > 0,
+  source: v => v.length > 0,
+  payment_type: v => v.length > 0
+  // spoc_remark is optional — no validator
+};
+
+function validateField(name, value){
+  const v = VALIDATORS[name];
+  return v ? v(value) : true;
+}
+
+function setFieldError(name, hasError){
+  const input = $(`#${name}`);
+  if (!input) return;
+  input.closest('.field').classList.toggle('has-error', hasError);
+}
+
+$$('#payment-form .input, #payment-form .select').forEach(el => {
+  el.addEventListener('blur', () => {
+    if (VALIDATORS[el.name]) setFieldError(el.name, !validateField(el.name, el.value));
+  });
+  el.addEventListener('input', () => {
+    if (el.closest('.field').classList.contains('has-error')
+        && validateField(el.name, el.value)) {
+      setFieldError(el.name, false);
+    }
+  });
+});
+
+/* ============================================================
+   SUBMIT TO APPS SCRIPT
+   Uses Content-Type: text/plain to avoid CORS preflight.
+   Apps Script reads e.postData.contents regardless.
+   ============================================================ */
+async function submitToScript(payload){
+  if (!isConfigured()){
+    throw new Error('Apps Script URL not configured.');
+  }
+  const res = await fetch(CONFIG.SCRIPT_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify(payload),
+    redirect: 'follow'
+  });
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  const json = await res.json();
+  if (!json.ok) throw new Error(json.error || 'Submission failed');
+  return json;
+}
+
+$('#payment-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const form = e.currentTarget;
+  const data = Object.fromEntries(new FormData(form).entries());
+
+  let firstInvalid = null;
+  Object.keys(VALIDATORS).forEach(name => {
+    const ok = validateField(name, data[name] ?? '');
+    setFieldError(name, !ok);
+    if (!ok && !firstInvalid) firstInvalid = name;
+  });
+
+  if (firstInvalid){
+    showToast({ title: 'Please fix the highlighted fields', type: 'error' });
+    $(`#${firstInvalid}`)?.focus();
+    return;
+  }
+
+  const btn = $('#submit-btn');
+  btn.disabled = true;
+  btn.textContent = 'Submitting…';
+
+  try {
+    const res = await submitToScript(data);
+    showToast({
+      title: 'Submission recorded',
+      body: `Saved at row ${res.id}. Finance team will review in the sheet.`
+    });
+    // Persist email so next session pre-fills it
+    try { localStorage.setItem('grayquest_spoc_email', data.email); } catch(_){}
+    form.reset();
+    $('#email').value = data.email;       // keep email after reset
+    setDefaultDate();
+    // Refresh the right panel so the user sees their entry-state if applicable
+    loadEntries();
+  } catch (err) {
+    showToast({
+      title: 'Submission failed',
+      body: err.message || 'Network issue. Please retry.',
+      type: 'error'
+    });
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Submit payment update';
+  }
+});
+
+/* ============================================================
+   SIDEBAR — fetch + render compact rows
+   Apps Script returns: [{ name, email, count, finance_remark }]
+   filtered to rows with Finance Remark = "Please check my remark"
+   and grouped by SPOC email.
+   ============================================================ */
+async function fetchPending(){
+  if (!isConfigured()) throw new Error('Apps Script URL not configured.');
+  const url = CONFIG.SCRIPT_URL + '?action=pending';
+  const res = await fetch(url, { redirect: 'follow' });
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  const json = await res.json();
+  if (!json.ok) throw new Error(json.error || 'Failed to load');
+  return json.data || [];
+}
+
+function renderEntries(rows){
+  const body  = $('#entries-body');
+  const head  = $('#entry-table-head');
+  const summary = $('#entry-summary');
+
+  if (!rows || rows.length === 0){
+    head.style.display = 'none';
+    body.innerHTML = `<div class="empty-state">No entries currently need attention.</div>`;
+    summary.textContent = '0 SPOCs with pending entries';
+    return;
+  }
+
+  const totalPending = rows.reduce((sum, r) => sum + (r.count || 0), 0);
+  summary.textContent = `${rows.length} ${rows.length === 1 ? 'SPOC' : 'SPOCs'} · ${totalPending} pending`;
+
+  head.style.display = 'grid';
+  body.innerHTML = rows.map(r => `
+    <div class="entry-row" title="${esc(r.email || '')}">
+      <span class="name">${esc(r.name || r.email || '—')}</span>
+      <span class="count">${Number(r.count || 0)} pending</span>
+      <span class="remark">${esc(r.finance_remark || 'Please check my remark')}</span>
+    </div>
+  `).join('');
+}
+
+async function loadEntries(){
+  const body = $('#entries-body');
+  const head = $('#entry-table-head');
+  const refresh = $('#refresh-btn');
+  const summary = $('#entry-summary');
+
+  head.style.display = 'none';
+  body.innerHTML = `<div class="loading-state">Loading entries…</div>`;
+  summary.textContent = 'Loading…';
+  refresh.classList.add('spinning');
+
+  try {
+    const rows = await fetchPending();
+    renderEntries(rows);
+  } catch (err) {
+    head.style.display = 'none';
+    body.innerHTML = `
+      <div class="error-state">
+        Could not load entries.<br>
+        <span style="font-size:11px; display:block; margin-top:4px;">${esc(err.message)}</span>
+        <span class="retry" id="retry-load">Retry</span>
+      </div>`;
+    summary.textContent = 'Error';
+    $('#retry-load')?.addEventListener('click', loadEntries);
+  } finally {
+    refresh.classList.remove('spinning');
+  }
+}
+
+/* ============================================================
+   INIT
+   ============================================================ */
+function setDefaultDate(){
+  const today = new Date().toISOString().split('T')[0];
+  $('#payment_date').max = today;
+  $('#payment_date').value = today;
+}
+
+(function init(){
+  setDefaultDate();
+
+  // Pre-fill email from localStorage if available
+  try {
+    const saved = localStorage.getItem('grayquest_spoc_email');
+    if (saved) $('#email').value = saved;
+  } catch(_){}
+
+  // Wire up "View Payment Sheet" link
+  if (CONFIG.SHEET_URL && CONFIG.SHEET_URL.includes('docs.google.com')){
+    $('#view-sheet-link').href = CONFIG.SHEET_URL;
+  } else {
+    $('#view-sheet-link').addEventListener('click', e => {
+      e.preventDefault();
+      showToast({ title: 'Sheet URL not configured', type: 'error' });
+    });
+  }
+
+  // Show config banner if anything is missing
+  if (!isConfigured()){
+    $('#config-banner').classList.add('show');
+    $('#entries-body').innerHTML =
+      `<div class="error-state">Apps Script URL not configured.<br>
+       <span style="font-size:11px; display:block; margin-top:4px;">Update CONFIG in this HTML.</span>
+      </div>`;
+    $('#entry-summary').textContent = 'Not configured';
+    return;
+  }
+
+  // Refresh on click
+  $('#refresh-btn').addEventListener('click', loadEntries);
+
+  // Initial load
+  loadEntries();
+})();
+</script>
+
+</body>
+</html>
