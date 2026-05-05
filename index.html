@@ -129,6 +129,16 @@ a{ color: inherit; text-decoration: none; }
 .btn-sheet svg{ width: 14px; height: 14px; flex-shrink: 0; color: var(--text-muted); }
 .btn-sheet:hover svg{ color: var(--accent); }
 
+  /* Company logo on the topbar right. Hides itself if logo.png is missing. */
+.company-logo{
+  height: 32px;
+  width: auto;
+  display: block;
+  object-fit: contain;
+  border-radius: 6px;
+}
+.company-logo[data-failed="true"]{ display: none; }
+
 /* ============================================================
    PAGE LAYOUT
    ============================================================ */
@@ -500,6 +510,8 @@ a{ color: inherit; text-decoration: none; }
       </svg>
       View Payment Sheet
     </a>
+    <img class="company-logo" src="logo.png" alt="grayQuest"
+         onerror="this.dataset.failed='true'">
   </div>
 </header>
 
