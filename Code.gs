@@ -1,6 +1,6 @@
 /**
- * grayQuest Payment Updation — Apps Script Backend
- * =================================================
+ * grayQuest Payment Updation — Apps Script Backend (v2)
+ * =====================================================
  *
  * Deploy this in your Google Sheet:
  *   1. Open the sheet
@@ -8,7 +8,7 @@
  *   3. Replace the default Code.gs with this file
  *   4. Save
  *   5. Deploy → New deployment → Type: Web app
- *      - Description: "Payment form backend"
+ *      - Description: "Payment form backend v2"
  *      - Execute as: Me
  *      - Who has access: Anyone
  *   6. Copy the /exec URL — paste into CONFIG.SCRIPT_URL in the HTML
@@ -21,6 +21,15 @@
  *   GET  ?action=pending   →  list of SPOCs with pending entries
  *                            (filtered to Finance Remark = "Please check my remark")
  *   POST  body = JSON      →  appends a new submission to the sheet
+ *
+ * v2 changes
+ * ----------
+ *   - Adds a 30-second CacheService layer in front of getPending_().
+ *     The frontend now polls every 60s in the background, and many tabs
+ *     may be open at once. This cache keeps execution time + quota low
+ *     without making the data feel stale (cache busts on every POST so
+ *     submissions always see fresh state).
+ *   - Cache is invalidated whenever a submission is appended.
  *
  * Security note
  * -------------
@@ -55,6 +64,12 @@ const HEADERS = [
 // Stored uppercased for case-insensitive matching.
 const PENDING_FINANCE_REMARK = 'PLEASE CHECK MY REMARK';
 
+// Cache settings — keep pending list cached for 30s.
+// Frontend auto-refreshes every 60s, so worst-case staleness in the UI is ~90s.
+// In practice it's ~60s because the cache often warms between polls.
+const CACHE_KEY = 'pending_v2';
+const CACHE_TTL_SEC = 30;
+
 
 // ============================================================
 // HTTP HANDLERS
@@ -63,7 +78,7 @@ function doGet(e) {
   try {
     const action = (e && e.parameter && e.parameter.action) || 'pending';
     if (action === 'pending') {
-      return jsonOut_({ ok: true, data: getPending_() });
+      return jsonOut_({ ok: true, data: getPendingCached_() });
     }
     return jsonOut_({ ok: false, error: 'Unknown action: ' + action });
   } catch (err) {
@@ -78,6 +93,10 @@ function doPost(e) {
     }
     const data = JSON.parse(e.postData.contents);
     const rowNumber = appendSubmission_(data);
+
+    // Bust the cache so the next pending fetch sees this row's state correctly.
+    invalidatePendingCache_();
+
     return jsonOut_({ ok: true, id: rowNumber });
   } catch (err) {
     return jsonOut_({ ok: false, error: String(err && err.message || err) });
@@ -88,6 +107,29 @@ function doPost(e) {
 // ============================================================
 // CORE LOGIC
 // ============================================================
+
+/**
+ * Cached wrapper around getPending_().
+ * Reads from CacheService first; only hits the sheet if cache missed.
+ */
+function getPendingCached_() {
+  const cache = CacheService.getScriptCache();
+  const cached = cache.get(CACHE_KEY);
+  if (cached) {
+    try { return JSON.parse(cached); } catch (_) { /* fall through */ }
+  }
+  const fresh = getPending_();
+  try {
+    cache.put(CACHE_KEY, JSON.stringify(fresh), CACHE_TTL_SEC);
+  } catch (_) {
+    // Cache.put can fail if payload > 100KB. We just skip caching in that case.
+  }
+  return fresh;
+}
+
+function invalidatePendingCache_() {
+  try { CacheService.getScriptCache().remove(CACHE_KEY); } catch (_) {}
+}
 
 /**
  * Reads the sheet, filters to entries where Finance Remark
@@ -199,7 +241,8 @@ function getOrCreateSheet_() {
       .getRange(1, 1, 1, HEADERS.length)
       .setValues([HEADERS])
       .setFontWeight('bold')
-      .setBackground('#F0F0EC');
+      .setBackground('#DBEAFE')
+      .setFontColor('#1E3A8A');
     sheet.setFrozenRows(1);
     sheet.autoResizeColumns(1, HEADERS.length);
   }
