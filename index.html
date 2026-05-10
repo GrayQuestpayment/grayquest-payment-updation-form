@@ -293,7 +293,7 @@ body::after {
    ================================================================ */
 .layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 390px;
+  grid-template-columns: minmax(0, 1fr);
   gap: 22px;
   align-items: start;
 }
@@ -502,6 +502,225 @@ body::after {
   border-color: var(--err);
   background: #fff8f8;
   animation: shakeField .35s var(--ease);
+}
+
+/* ================================================================
+   CHIP / TILE / ACCT SELECTORS — Method, Received From, Source, Type
+   ================================================================ */
+
+/* CHIP GROUP — for Method, Payment Type */
+.chip-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  cursor: pointer;
+  transition: border-color .15s ease, background .15s ease, box-shadow .15s ease, color .15s ease;
+  font-family: var(--body);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-2);
+  letter-spacing: 0.01em;
+  user-select: none;
+}
+.chip input { position: absolute; opacity: 0; pointer-events: none; }
+.chip:hover {
+  border-color: var(--gq-light);
+  background: var(--gq-ghost);
+}
+.chip-sub {
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--ink-3);
+  background: var(--gq-ghost);
+  padding: 3px 7px;
+  border-radius: 5px;
+  letter-spacing: 0;
+  transition: background .15s ease, color .15s ease;
+}
+.chip:has(input:checked) {
+  border-color: var(--gq);
+  background: var(--gq-pale);
+  color: var(--gq-dark);
+  box-shadow: 0 0 0 3px var(--gq-ring);
+}
+.chip:has(input:checked) .chip-sub {
+  background: var(--gq);
+  color: #fff;
+}
+.chip:focus-within {
+  outline: 2px solid var(--gq-ring);
+  outline-offset: 2px;
+}
+
+/* TILE GROUP — for Payment Received From */
+.tile-group {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.tile-card {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  cursor: pointer;
+  transition: border-color .15s ease, background .15s ease, box-shadow .15s ease;
+  user-select: none;
+}
+.tile-card input { position: absolute; opacity: 0; pointer-events: none; }
+.tile-card:hover {
+  border-color: var(--gq-light);
+  background: var(--gq-ghost);
+}
+.tile-card:has(input:checked) {
+  border-color: var(--gq);
+  background: var(--gq-pale);
+  box-shadow: 0 0 0 3px var(--gq-ring);
+}
+.tile-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 9px;
+  background: var(--gq-pale);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--gq);
+  flex-shrink: 0;
+  transition: background .15s ease, color .15s ease;
+}
+.tile-icon svg { width: 19px; height: 19px; }
+.tile-card:has(input:checked) .tile-icon {
+  background: var(--gq);
+  color: #fff;
+}
+.tile-body { flex: 1; min-width: 0; }
+.tile-title {
+  font-family: var(--display);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+}
+.tile-sub {
+  font-size: 12px;
+  color: var(--ink-3);
+  margin-top: 2px;
+  line-height: 1.35;
+}
+
+/* ACCOUNT GROUP — for Source Account */
+.acct-group {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+.acct-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  cursor: pointer;
+  transition: border-color .15s ease, background .15s ease, box-shadow .15s ease;
+  min-height: 100px;
+  user-select: none;
+}
+.acct-card input { position: absolute; opacity: 0; pointer-events: none; }
+.acct-card:hover {
+  border-color: var(--gq-light);
+  background: var(--gq-ghost);
+}
+.acct-card:has(input:checked) {
+  border-color: var(--gq);
+  background: var(--gq-pale);
+  box-shadow: 0 0 0 3px var(--gq-ring);
+}
+.acct-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.acct-tag {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--ink-3);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.acct-card:has(input:checked) .acct-tag { color: var(--gq-dark); }
+.acct-radio {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1.5px solid var(--ink-5);
+  flex-shrink: 0;
+  position: relative;
+  background: #fff;
+  transition: border-color .15s ease, background .15s ease;
+}
+.acct-card:has(input:checked) .acct-radio {
+  border-color: var(--gq);
+  background: var(--gq);
+}
+.acct-card:has(input:checked) .acct-radio::after {
+  content: '';
+  position: absolute;
+  inset: 3px;
+  border-radius: 50%;
+  background: #fff;
+}
+.acct-title {
+  font-family: var(--display);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+  word-break: break-all;
+  line-height: 1.25;
+}
+.acct-sub {
+  font-size: 11.5px;
+  color: var(--ink-3);
+  margin-top: auto;
+}
+
+/* Error states for new components */
+.field.is-err .chip,
+.field.is-err .tile-card,
+.field.is-err .acct-card {
+  border-color: var(--err);
+  background: #fff8f8;
+}
+.field.is-err .chip:has(input:checked),
+.field.is-err .tile-card:has(input:checked),
+.field.is-err .acct-card:has(input:checked) {
+  background: var(--gq-pale);
+  border-color: var(--gq);
+}
+
+/* Mobile collapse */
+@media (max-width: 720px) {
+  .tile-group { grid-template-columns: 1fr; }
+  .acct-group { grid-template-columns: 1fr; }
 }
 
 /* ================================================================
@@ -1057,19 +1276,18 @@ body::after {
               </div>
 
               <!-- Method -->
-              <div class="field" id="f-method">
+              <div class="field field-full" id="f-method">
                 <div class="label">
                   <span class="label-text">Method <span class="req">*</span></span>
                 </div>
-                <select class="select" id="method" name="method" required>
-                  <option value="">Select method…</option>
-                  <option>NEFT</option>
-                  <option>UPI</option>
-                  <option>IMPS</option>
-                  <option>CHEQUE</option>
-                  <option>CASH</option>
-                  <option>RTGS</option>
-                </select>
+                <div class="chip-group" role="radiogroup" aria-label="Payment method">
+                  <label class="chip"><input type="radio" name="method" value="NEFT" required>NEFT <span class="chip-sub">National EFT</span></label>
+                  <label class="chip"><input type="radio" name="method" value="UPI">UPI <span class="chip-sub">Instant transfer</span></label>
+                  <label class="chip"><input type="radio" name="method" value="IMPS">IMPS <span class="chip-sub">Immediate</span></label>
+                  <label class="chip"><input type="radio" name="method" value="RTGS">RTGS <span class="chip-sub">Real-time gross</span></label>
+                  <label class="chip"><input type="radio" name="method" value="CHEQUE">CHEQUE <span class="chip-sub">Physical cheque</span></label>
+                  <label class="chip"><input type="radio" name="method" value="CASH">CASH <span class="chip-sub">Cash receipt</span></label>
+                </div>
                 <span class="field-hint">How the payment was transferred.</span>
                 <span class="field-err">Select a payment method</span>
               </div>
@@ -1097,30 +1315,75 @@ body::after {
             <div class="field-grid">
 
               <!-- Received From -->
-              <div class="field" id="f-received_from">
+              <div class="field field-full" id="f-received_from">
                 <div class="label">
                   <span class="label-text">Payment Received From <span class="req">*</span></span>
                 </div>
-                <select class="select" id="received_from" name="received_from" required>
-                  <option value="">Select source…</option>
-                  <option>Institute</option>
-                  <option>Parent</option>
-                </select>
+                <div class="tile-group" role="radiogroup" aria-label="Payment received from">
+                  <label class="tile-card">
+                    <input type="radio" name="received_from" value="Institute" required>
+                    <div class="tile-icon" aria-hidden="true">
+                      <svg viewBox="0 0 20 20" fill="none">
+                        <path d="M3 17h14M3 17V8.5L10 5l7 3.5V17M7 17v-5h2v5M11 17v-5h2v5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                      </svg>
+                    </div>
+                    <div class="tile-body">
+                      <div class="tile-title">Institute</div>
+                      <div class="tile-sub">Education partner sent funds</div>
+                    </div>
+                  </label>
+                  <label class="tile-card">
+                    <input type="radio" name="received_from" value="Parent">
+                    <div class="tile-icon" aria-hidden="true">
+                      <svg viewBox="0 0 20 20" fill="none">
+                        <circle cx="10" cy="7" r="3" stroke="currentColor" stroke-width="1.5"/>
+                        <path d="M4 17c0-3 2.7-5 6-5s6 2 6 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                      </svg>
+                    </div>
+                    <div class="tile-body">
+                      <div class="tile-title">Parent</div>
+                      <div class="tile-sub">Customer / parent paid direct</div>
+                    </div>
+                  </label>
+                </div>
                 <span class="field-hint">Who sent the payment.</span>
                 <span class="field-err">Select a payment source</span>
               </div>
 
               <!-- Source Account -->
-              <div class="field" id="f-source">
+              <div class="field field-full" id="f-source">
                 <div class="label">
                   <span class="label-text">Source Account <span class="req">*</span></span>
                 </div>
-                <select class="select" id="source" name="source" required>
-                  <option value="">Select account…</option>
-                  <option>CURRENT A/C - 630</option>
-                  <option>RAZORPAY AC 7616</option>
-                  <option>2223002469792255</option>
-                </select>
+                <div class="acct-group" role="radiogroup" aria-label="Source account">
+                  <label class="acct-card">
+                    <input type="radio" name="source" value="RAZORPAY 2223002469792255" required>
+                    <div class="acct-head">
+                      <span class="acct-tag">RAZORPAY</span>
+                      <span class="acct-radio" aria-hidden="true"></span>
+                    </div>
+                    <div class="acct-title">2223002469792255</div>
+                    <div class="acct-sub">Razorpay A/C</div>
+                  </label>
+                  <label class="acct-card">
+                    <input type="radio" name="source" value="YES BANK 045163700000630">
+                    <div class="acct-head">
+                      <span class="acct-tag">YES BANK</span>
+                      <span class="acct-radio" aria-hidden="true"></span>
+                    </div>
+                    <div class="acct-title">045163700000630</div>
+                    <div class="acct-sub">Yes Bank A/C</div>
+                  </label>
+                  <label class="acct-card">
+                    <input type="radio" name="source" value="Direct Lender">
+                    <div class="acct-head">
+                      <span class="acct-tag">DIRECT</span>
+                      <span class="acct-radio" aria-hidden="true"></span>
+                    </div>
+                    <div class="acct-title">Direct Lender</div>
+                    <div class="acct-sub">No bank account</div>
+                  </label>
+                </div>
                 <span class="field-hint">Account where money was credited.</span>
                 <span class="field-err">Select a source account</span>
               </div>
@@ -1130,20 +1393,19 @@ body::after {
                 <div class="label">
                   <span class="label-text">Payment Type <span class="req">*</span></span>
                 </div>
-                <select class="select" id="payment_type" name="payment_type" required>
-                  <option value="">Select type…</option>
-                  <option>DROPOUT</option>
-                  <option>EMI</option>
-                  <option>FORECLOSURE</option>
-                  <option>POS ZERO HEMALI</option>
-                  <option>BOUNCE CHARGES</option>
-                  <option>MANADE CHARGES</option>
-                  <option>EXTRA AMOUNT</option>
-                  <option>EXCESS AMOUNT FROM INSTITUTE AS EMI</option>
-                  <option>CONSIDER AS EMI</option>
-                  <option>OTHER CHARGES</option>
-                  <option>DOUBLE DISB CASE</option>
-                </select>
+                <div class="chip-group" role="radiogroup" aria-label="Payment type">
+                  <label class="chip"><input type="radio" name="payment_type" value="EMI" required>EMI</label>
+                  <label class="chip"><input type="radio" name="payment_type" value="DROPOUT">DROPOUT</label>
+                  <label class="chip"><input type="radio" name="payment_type" value="FORECLOSURE">FORECLOSURE</label>
+                  <label class="chip"><input type="radio" name="payment_type" value="POS ZERO HEMALI">POS ZERO HEMALI</label>
+                  <label class="chip"><input type="radio" name="payment_type" value="BOUNCE CHARGES">BOUNCE CHARGES</label>
+                  <label class="chip"><input type="radio" name="payment_type" value="MANADE CHARGES">MANADE CHARGES</label>
+                  <label class="chip"><input type="radio" name="payment_type" value="EXTRA AMOUNT">EXTRA AMOUNT</label>
+                  <label class="chip"><input type="radio" name="payment_type" value="EXCESS AMOUNT FROM INSTITUTE AS EMI">EXCESS AMOUNT FROM INSTITUTE AS EMI</label>
+                  <label class="chip"><input type="radio" name="payment_type" value="CONSIDER AS EMI">CONSIDER AS EMI</label>
+                  <label class="chip"><input type="radio" name="payment_type" value="OTHER CHARGES">OTHER CHARGES</label>
+                  <label class="chip"><input type="radio" name="payment_type" value="DOUBLE DISB CASE">DOUBLE DISB CASE</label>
+                </div>
                 <span class="field-hint">Category that best describes this payment.</span>
                 <span class="field-err">Select a payment type</span>
               </div>
@@ -1187,60 +1449,8 @@ body::after {
     </section>
 
     <!-- ====================================================
-         RIGHT: PENDING PANEL
+         RIGHT: PENDING PANEL — removed
          ==================================================== -->
-    <aside class="card sidebar">
-      <div class="card-head">
-        <div class="card-title-row">
-          <div style="display:flex;align-items:flex-start;gap:13px;">
-            <div class="card-icon">
-              <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
-                <circle cx="10" cy="10" r="8" stroke="currentColor" stroke-width="1.6"/>
-                <path d="M10 6v5l3 2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-            </div>
-            <div class="card-label-group">
-              <div class="card-title">Pending — Check Remark</div>
-              <div class="card-desc" id="entry-summary">Loading…</div>
-            </div>
-          </div>
-          <button class="refresh-btn" id="refresh-btn" title="Refresh" aria-label="Refresh">
-            <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <path d="M14 8a6 6 0 1 1-1.76-4.24L14 5.5M14 2v3.5h-3.5"
-                    stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-          </button>
-        </div>
-      </div>
-      <div class="card-divider"></div>
-
-      <!-- Freshness strip -->
-      <div class="sidebar-strip">
-        <span class="freshness" id="freshness-ind">
-          <span class="live-dot"></span>
-          <span id="freshness-txt">—</span>
-        </span>
-        <span class="auto-label">Auto-refreshes every 60s</span>
-      </div>
-
-      <!-- Table head -->
-      <div class="tbl-head" id="tbl-head">
-        <span>SPOC</span>
-        <span>Pending</span>
-        <span class="col-r">Finance Remark</span>
-      </div>
-
-      <!-- Body -->
-      <div class="card-body" id="entries-body">
-        <!-- initial skeleton -->
-        <div id="init-skeleton">
-          <div class="sk-row"><div class="sk medium"></div><div class="sk pill"></div><div class="sk short"></div></div>
-          <div class="sk-row"><div class="sk short"></div><div class="sk pill"></div><div class="sk medium"></div></div>
-          <div class="sk-row"><div class="sk medium"></div><div class="sk pill"></div><div class="sk short"></div></div>
-          <div class="sk-row"><div class="sk short"></div><div class="sk pill"></div><div class="sk medium"></div></div>
-        </div>
-      </div>
-    </aside>
 
   </div>
 </main>
@@ -1319,6 +1529,13 @@ $$('#payment-form .input, #payment-form .select, #payment-form .textarea').forEa
   });
 });
 
+// Live validation for radio-based selectors (chip / tile / acct)
+$$('#payment-form input[type="radio"]').forEach(el => {
+  el.addEventListener('change', () => {
+    if (RULES[el.name]) setErr(el.name, !validate(el.name, el.value));
+  });
+});
+
 /* ============================================================
    SUBMIT
    ============================================================ */
@@ -1349,7 +1566,9 @@ $('#payment-form').addEventListener('submit', async e => {
   });
   if (firstBad) {
     showToast({ title: 'Fix the highlighted fields', type: 'err' });
-    $(`#${firstBad}`)?.focus();
+    const target = $(`#${firstBad}`) || $(`[name="${firstBad}"]`);
+    target?.focus();
+    $(`#f-${firstBad}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     return;
   }
 
@@ -1367,7 +1586,6 @@ $('#payment-form').addEventListener('submit', async e => {
     form.reset();
     $('#email').value = data.email;
     setTodayDate();
-    loadEntries({ silent: true });
   } catch(err) {
     showToast({ title: 'Submission failed', body: err.message || 'Network error — please retry.', type: 'err' });
   } finally {
@@ -1487,12 +1705,6 @@ function startAutoRefresh() {
   autoTimer = setInterval(() => { if (!document.hidden) loadEntries({ silent: true }); }, CONFIG.AUTO_REFRESH_MS);
 }
 
-document.addEventListener('visibilitychange', () => {
-  if (!document.hidden && lastUpdate && Date.now() - lastUpdate > CONFIG.STALE_AFTER_MS) {
-    loadEntries({ silent: true });
-  }
-});
-
 /* ============================================================
    INIT
    ============================================================ */
@@ -1516,21 +1728,8 @@ function setTodayDate() {
       showToast({ title: 'Sheet URL not configured', type: 'err' });
     });
     $('#config-banner').classList.add('show');
-    $('#entries-body').innerHTML = `
-      <div class="error-state">
-        <div class="state-icon"><svg viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="8" stroke="currentColor" stroke-width="1.5"/><path d="M10 7v4M10 13v.01" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></div>
-        <div class="state-title">Not configured</div>
-        <div class="state-sub">Update CONFIG in this HTML file</div>
-      </div>`;
-    $('#entry-summary').textContent = 'Setup required';
     return;
   }
-
-  $('#refresh-btn').addEventListener('click', () => loadEntries({ silent: false }));
-
-  loadEntries({ silent: false });
-  startAutoRefresh();
-  tickTimer = setInterval(tickFreshness, 5000);
 })();
 </script>
 </body>
