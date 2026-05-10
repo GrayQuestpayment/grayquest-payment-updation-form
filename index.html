@@ -1256,9 +1256,9 @@ body::after {
                   <span class="label-text">App ID <span class="req">*</span></span>
                 </div>
                 <input class="input mono" type="text" id="app_id" name="app_id" required
-                       placeholder="APP-2024-XXXXX" autocomplete="off">
+                       autocomplete="off">
                 <span class="field-hint">Application ID from the lending system.</span>
-                <span class="field-err">App ID is required (min. 3 chars)</span>
+                <span class="field-err"></span>
               </div>
 
               <!-- Amount -->
@@ -1397,9 +1397,9 @@ body::after {
                   <label class="chip"><input type="radio" name="payment_type" value="EMI" required>EMI</label>
                   <label class="chip"><input type="radio" name="payment_type" value="DROPOUT">DROPOUT</label>
                   <label class="chip"><input type="radio" name="payment_type" value="FORECLOSURE">FORECLOSURE</label>
-                  <label class="chip"><input type="radio" name="payment_type" value="POS ZERO HEMALI">POS ZERO HEMALI</label>
+                  <label class="chip"><input type="radio" name="payment_type" value="POS ZERO">POS ZERO</label>
                   <label class="chip"><input type="radio" name="payment_type" value="BOUNCE CHARGES">BOUNCE CHARGES</label>
-                  <label class="chip"><input type="radio" name="payment_type" value="MANADE CHARGES">MANADE CHARGES</label>
+                  <label class="chip"><input type="radio" name="payment_type" value="MANDATE CHARGES">MANDATE CHARGES</label>
                   <label class="chip"><input type="radio" name="payment_type" value="EXTRA AMOUNT">EXTRA AMOUNT</label>
                   <label class="chip"><input type="radio" name="payment_type" value="EXCESS AMOUNT FROM INSTITUTE AS EMI">EXCESS AMOUNT FROM INSTITUTE AS EMI</label>
                   <label class="chip"><input type="radio" name="payment_type" value="CONSIDER AS EMI">CONSIDER AS EMI</label>
@@ -1497,6 +1497,28 @@ function isConfigured() {
          CONFIG.SHEET_URL?.includes('docs.google.com');
 }
 
+/* Format any date / 'YYYY-MM-DD' string into '10-May-26' (DD-Mon-YY).
+   Returns the original string unchanged if it can't be parsed. */
+function formatDateDDMonYY(input) {
+  if (!input) return '';
+  let d;
+  if (input instanceof Date) {
+    d = input;
+  } else if (typeof input === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(input)) {
+    // Treat YYYY-MM-DD as a local-calendar date, not UTC midnight (avoids TZ shift).
+    const [y, m, day] = input.split('-').map(Number);
+    d = new Date(y, m - 1, day);
+  } else {
+    d = new Date(input);
+  }
+  if (isNaN(d)) return String(input);
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const dd  = String(d.getDate()).padStart(2, '0');
+  const mon = months[d.getMonth()];
+  const yy  = String(d.getFullYear()).slice(-2);
+  return `${dd}-${mon}-${yy}`;
+}
+
 /* ============================================================
    VALIDATION
    ============================================================ */
@@ -1571,6 +1593,10 @@ $('#payment-form').addEventListener('submit', async e => {
     $(`#f-${firstBad}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     return;
   }
+
+  // Format dates for the sheet: payment_date and timestamp both as DD-Mon-YY (e.g. 10-May-26)
+  data.payment_date = formatDateDDMonYY(data.payment_date);
+  data.timestamp    = formatDateDDMonYY(new Date());
 
   const btn = $('#submit-btn');
   const lbl = $('#submit-lbl');
