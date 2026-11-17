@@ -16,6 +16,20 @@ This is the deployment guide for the Payment Updation Automated Form. The system
 
 ---
 
+## What's new in v3 — bulk payments
+
+- **Payment Details is now a line table.** Each line is `App ID | Amount | Payment Date | UTR` in one row.
+- **Bulk transfers:** click **+ Add another App ID** to add more lines. A new line copies the Payment Date and UTR from the line above, so for one institute transfer covering many students you only type App ID + Amount. Max 50 lines per submission.
+- **Running total** under the lines (`3 lines · Total ₹3,43,050.5`). Match it against the bank credit before you submit.
+- **Shared fields** (SPOC Email, Method, Received From, Source Account, Payment Type, SPOC Remark) apply to every line. If lines need different values, submit them separately.
+- **Sheet layout is unchanged.** Each line becomes its own row (one row = one App ID), so finance columns, lookups and the mail flow work as before. All rows from one bulk submission share the same Timestamp.
+- **All-or-nothing:** the script checks every line first. If one line is wrong, nothing is saved and the error names the line (`Line 3: Invalid amount`).
+- **Backward compatible:** a 1-line submission sends exactly the same request as v2.
+
+> Already running v2? See **Upgrading an existing deployment (v2 → v3)** near the end of this file.
+
+---
+
 ## Step 1 — Create the Google Sheet
 
 1. Create a new Google Sheet in the Google account that should own the data.
@@ -72,13 +86,18 @@ Open `payment-update-form.html` and find the `CONFIG` block near the top of the 
 ```javascript
 const CONFIG = {
   SCRIPT_URL: 'PASTE_YOUR_APPS_SCRIPT_WEB_APP_URL_HERE',
-  SHEET_URL:  'PASTE_YOUR_GOOGLE_SHEET_URL_HERE'
+  SHEET_URL:  'PASTE_YOUR_GOOGLE_SHEET_URL_HERE',
+  AUTO_REFRESH_MS: 60_000,
+  STALE_AFTER_MS:  30_000,
+  MAX_ROWS:        50
 };
 ```
 
 Replace both:
 - `SCRIPT_URL` → the `/exec` URL from Step 3
 - `SHEET_URL` → the standard `/edit` URL of your sheet (employees who click "View Payment Sheet" land there with their column-protected edit access)
+
+`MAX_ROWS` is the most App ID lines allowed in one submission (the script accepts up to 100). Leave the rest as is.
 
 Save the file.
 
@@ -96,10 +115,11 @@ Save the file.
 
 ## Step 7 — Test end-to-end
 
-1. Submit a test entry via the form. Confirm a new row appears in the sheet.
-2. In the sheet, manually set the **Finance Remark** column for that row to `Please check my remark`.
-3. Reload the form (or click the refresh button on the right panel). Your test submission should now show as a pending entry, grouped under your derived name.
-4. Set the Finance Remark to something else (or clear it). Refresh — entry disappears from the panel.
+1. Open `SCRIPT_URL?action=version` in the browser. You should see `{"ok":true,"version":3,"bulk":true,...}`. If you see `Unknown action: version`, the old code is still deployed. Redeploy as a **New version** (Step 3 note).
+2. **Single line:** submit a test entry with one line. Confirm one new row appears in the sheet.
+3. **Bulk:** add 2–3 lines with **+ Add another App ID** and submit. The toast should say e.g. `3 payments recorded · Saved at rows 1827–1829`. Confirm one row per App ID, with the same Timestamp, Method, Source and Payment Type on each.
+4. **Validation:** leave one line's Amount empty and submit. The cell turns red and nothing is posted.
+5. Delete the test rows from the sheet when done.
 
 ---
 
@@ -123,6 +143,10 @@ The Apps Script writes to and reads from these columns in this order. Don't reor
 | 12 | Finance Remark | Finance team | The trigger column for the right panel |
 | 13 | Finance Team Remark | Finance team | Free-form notes from finance |
 
+One row = one App ID, also for bulk submissions. Rows from one bulk submission share the same Timestamp, SPOC Email, Method, Received From, Source Account, Payment Type and SPOC Remark.
+
+The script only writes columns 1–13 (A–M). Columns the finance team added to the right (PAY ID, A/C NO, IFSC CODE, … Mail Status, Send Mail, LENDER) are never written or cleared by the script.
+
 ---
 
 ## Common gotchas
@@ -139,8 +163,41 @@ The Apps Script writes to and reads from these columns in this order. Don't reor
 **Employees can edit other columns in the sheet**
 - Re-check Step 4. Google Sheets needs the sheet to be shared as **Editor** + an explicit **Protect sheet** rule + an **Edit exception** for the SPOC Remark column. All three are required.
 
+**Bulk submit fails with "Bulk submit needs the updated Apps Script (v3)"**
+- The HTML is on v3 but the Apps Script is still on v2. Single-line submissions keep working in the meantime. Update `Code.gs` and redeploy as a **New version** (see the upgrade section below), then check `SCRIPT_URL?action=version`.
+
+**"Line N: …" error on submit**
+- The script checks every line before saving anything. Fix line N and submit again. Nothing from that attempt was saved.
+
+**"Sheet is busy — please submit again in a few seconds"**
+- Another submission was being written at the same moment and took longer than 30 seconds. Retry. Nothing was saved from the failed attempt.
+
 **Names in the right panel look weird**
 - The script derives names from emails (`priya.sharma@...` → "Priya Sharma"). If your email format is different, edit `deriveName_()` in `Code.gs` or add a real "Name" column to the sheet and have the script return that instead.
+
+---
+
+## Upgrading an existing deployment (v2 → v3)
+
+Update in this order: **Apps Script first, then GitHub**. If the HTML goes live first, single-line submissions still work and bulk shows a clear "needs the updated Apps Script" message until the script is updated. Nothing breaks either way.
+
+**A. Apps Script (Code.gs)**
+1. Open the sheet → **Extensions → Apps Script**.
+2. Open `Code.gs`, select all, and paste the new `Code.gs`. If the project has other `.gs` files (for example a mail-sending script), leave them alone.
+3. **Save**.
+4. In the function dropdown pick `initSheet` → **Run**. If Google asks for permission, click **Allow**. This changes nothing in the sheet; it only confirms the script is authorised.
+5. **Deploy → Manage deployments** → pencil icon on the existing deployment → **Version: New version** → **Deploy**. Don't use "New deployment". That creates a new URL and the live form would keep calling the old one.
+6. Open `SCRIPT_URL?action=version` → should show `"version":3`.
+
+**B. GitHub Pages (index.html)**
+1. Optional: download the current `index.html` from the repo as a backup. GitHub's commit history also lets you revert.
+2. Repo → `index.html` → edit (pencil) → replace the whole content with the new `index.html` → **Commit changes**. Or use **Add file → Upload files** with the same file name.
+3. Wait 1–2 minutes and open the site with a hard refresh (`Ctrl+Shift+R` / `Cmd+Shift+R`).
+4. Run the tests in Step 7.
+
+**C. README.md**: replace it in the repo (documentation only, no effect on the app).
+
+No changes are needed in the Google Sheet: same tab, same columns, same protection.
 
 ---
 
