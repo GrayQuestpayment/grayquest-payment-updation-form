@@ -1819,6 +1819,31 @@ async function postToScript(payload) {
   return json;
 }
 
+/* Does the deployed Apps Script accept a whole bulk submission in one request?
+   Code.gs v3 answers ?action=version with { ok:true, bulk:true }.
+   Any other answer (older Code.gs) → lines are sent one by one, each as a
+   normal single-entry request, which every backend version understands. */
+let bulkSupport = null;
+async function backendSupportsBulk() {
+  if (bulkSupport !== null) return bulkSupport;
+  try {
+    const res  = await fetch(CONFIG.SCRIPT_URL + '?action=version', { redirect: 'follow' });
+    const json = await res.json();
+    bulkSupport = !!(json && json.ok && json.bulk === true);
+    return bulkSupport;
+  } catch (_) {
+    return false;   // network hiccup: use the safe one-by-one path, check again next time
+  }
+}
+
+/* [1827,1828,1829] → "rows 1827–1829";  [1827,1830] → "rows 1827, 1830" */
+function fmtRows(ids) {
+  if (!ids?.length) return 'the sheet';
+  const consecutive = ids.every((v, i) => i === 0 || v === ids[i - 1] + 1);
+  if (ids.length === 1) return `row ${ids[0]}`;
+  return consecutive ? `rows ${ids[0]}–${ids[ids.length - 1]}` : `rows ${ids.join(', ')}`;
+}
+
 $('#payment-form').addEventListener('submit', async e => {
   e.preventDefault();
   const form = e.currentTarget;
@@ -1847,10 +1872,11 @@ $('#payment-form').addEventListener('submit', async e => {
   const totalAmt = entries.reduce((s, x) => s + parseFloat(x.amount), 0);
   data.timestamp = formatDateDDMonYY(new Date());
 
-  // 1 line  → exact same payload as before (works with old + new Apps Script)
-  // 2+ lines → bulk payload with entries[] (needs Code.gs v3)
-  const isBulk  = entries.length > 1;
-  const payload = isBulk ? { ...data, entries } : { ...data, ...entries[0] };
+  // 1 line   → exact same payload as before (works with every Apps Script version)
+  // 2+ lines → one bulk request if Code.gs v3 is deployed, otherwise one request per line
+  const isBulk   = entries.length > 1;
+  const rowEls   = payRows();          // the lines being submitted, in order
+  const fmtTotal = '₹' + totalAmt.toLocaleString('en-IN', { maximumFractionDigits: 2 });
 
   const btn = $('#submit-btn');
   const lbl = $('#submit-lbl');
@@ -1859,27 +1885,56 @@ $('#payment-form').addEventListener('submit', async e => {
   ico.outerHTML = '<span class="spinner-ring" id="submit-ico"></span>';
   lbl.textContent = 'Submitting…';
 
+  let saved = [];   // sheet row numbers written in this submission
   try {
-    const res = await postToScript(payload);
-    if (isBulk) {
-      const rowsTxt = res.first && res.last ? `rows ${res.first}–${res.last}` : 'the sheet';
+    if (!isBulk) {
+      const res = await postToScript({ ...data, ...entries[0] });
+      showToast({ title: 'Payment recorded', body: `Saved at row ${res.id}. Finance team will review.` });
+    } else {
+      if (await backendSupportsBulk()) {
+        // Code.gs v3: all lines in one all-or-nothing request
+        const res = await postToScript({ ...data, entries });
+        saved = res.ids || [];
+      } else {
+        // Older Code.gs: one normal single-entry request per line
+        for (let i = 0; i < entries.length; i++) {
+          lbl.textContent = `Submitting ${i + 1}/${entries.length}…`;
+          let res;
+          try {
+            res = await postToScript({ ...data, ...entries[i] });
+          } catch (lineErr) {
+            const err = new Error(lineErr.message || 'Network error');
+            err.failedLine = i;
+            throw err;
+          }
+          saved.push(res.id);
+        }
+      }
       showToast({
-        title: `${res.count || entries.length} payments recorded`,
-        body: `Saved at ${rowsTxt} · Total ₹${totalAmt.toLocaleString('en-IN', { maximumFractionDigits: 2 })}. Finance team will review.`,
+        title: `${entries.length} payments recorded`,
+        body: `Saved at ${fmtRows(saved)} · Total ${fmtTotal}. Finance team will review.`,
         ms: 6000
       });
-    } else {
-      showToast({ title: 'Payment recorded', body: `Saved at row ${res.id}. Finance team will review.` });
     }
     try { localStorage.setItem('gq_email', data.email); } catch(_) {}
     form.reset();                 // 'reset' handler brings back one empty line with today's date
     $('#email').value = data.email;
   } catch(err) {
-    let body = err.message || 'Network error — please retry.';
-    if (isBulk && /^Missing required field/.test(body)) {
-      body = 'Bulk submit needs the updated Apps Script (v3). Ask the sheet owner to redeploy Code.gs as a New version. Single-line submissions still work.';
+    const msg = err.message || 'Network error — please retry.';
+    if (err.failedLine > 0) {
+      // Some lines were saved before the failure: take them out of the form
+      // so a retry can't create duplicates; the unsaved lines stay for retry.
+      rowEls.slice(0, err.failedLine).forEach(r => r.remove());
+      refreshRows();
+      showToast({
+        title: `${err.failedLine} of ${entries.length} saved — rest not submitted`,
+        body: `Saved at ${fmtRows(saved)}. Line ${err.failedLine + 1} failed: ${msg}. The unsaved lines are still in the form — check and Submit again.`,
+        type: 'err',
+        ms: 12000
+      });
+    } else {
+      showToast({ title: 'Submission failed', body: msg, type: 'err', ms: 8000 });
     }
-    showToast({ title: 'Submission failed', body, type: 'err', ms: 8000 });
   } finally {
     btn.disabled = false;
     const ring = $('#submit-ico');
