@@ -23,8 +23,12 @@ This is the deployment guide for the Payment Updation Automated Form. The system
 - **Running total** under the lines (`3 lines · Total ₹3,43,050.5`). Match it against the bank credit before you submit.
 - **Shared fields** (SPOC Email, Method, Received From, Source Account, Payment Type, SPOC Remark) apply to every line. If lines need different values, submit them separately.
 - **Sheet layout is unchanged.** Each line becomes its own row (one row = one App ID), so finance columns, lookups and the mail flow work as before. All rows from one bulk submission share the same Timestamp.
-- **All-or-nothing:** the script checks every line first. If one line is wrong, nothing is saved and the error names the line (`Line 3: Invalid amount`).
+- **Works with any deployed Code.gs.** On submit, the page asks the script `?action=version`:
+  - **Code.gs v3 deployed** → all lines go in one request, all-or-nothing. If one line is wrong, nothing is saved and the error names the line (`Line 3: Invalid amount`).
+  - **Older Code.gs deployed** → each line is sent as a normal single-entry request, one after another (button shows `Submitting 2/5…`). If a line fails, the lines already saved are removed from the form and the unsaved lines stay there, so a retry never creates duplicates.
 - **Backward compatible:** a 1-line submission sends exactly the same request as v2.
+
+> ⚠️ **Do not deploy a "New version" to the form's web app while `AUTO MAIL.gs` has its own `doGet` / `doPost`.** Apps Script lets only one `doGet`/`doPost` exist per project. The one in `AUTO MAIL.gs` replaces the form's, and every submission fails with "Submission failed". The form's deployment (`AKfycbyFONd…`) is pinned to **Version 4 (May 7, 2026)**, which works. See **Known issue: AUTO MAIL.gs** below.
 
 > Already running v2? See **Upgrading an existing deployment (v2 → v3)** near the end of this file.
 
@@ -115,7 +119,10 @@ Save the file.
 
 ## Step 7 — Test end-to-end
 
-1. Open `SCRIPT_URL?action=version` in the browser. You should see `{"ok":true,"version":3,"bulk":true,...}`. If you see `Unknown action: version`, the old code is still deployed. Redeploy as a **New version** (Step 3 note).
+1. Open `SCRIPT_URL?action=version` in the browser:
+   - `{"ok":true,"version":3,"bulk":true,...}` → Code.gs v3 is live (bulk = one request).
+   - `{"ok":false,"error":"Unknown action: version"}` → older Code.gs is live. Form and bulk still work (bulk = line by line).
+   - `{"status":"success","message":"GrayQuest auto-send is live"}` → **broken**: AUTO MAIL's handler is answering. Roll back (see Common gotchas).
 2. **Single line:** submit a test entry with one line. Confirm one new row appears in the sheet.
 3. **Bulk:** add 2–3 lines with **+ Add another App ID** and submit. The toast should say e.g. `3 payments recorded · Saved at rows 1827–1829`. Confirm one row per App ID, with the same Timestamp, Method, Source and Payment Type on each.
 4. **Validation:** leave one line's Amount empty and submit. The cell turns red and nothing is posted.
@@ -163,8 +170,11 @@ The script only writes columns 1–13 (A–M). Columns the finance team added to
 **Employees can edit other columns in the sheet**
 - Re-check Step 4. Google Sheets needs the sheet to be shared as **Editor** + an explicit **Protect sheet** rule + an **Edit exception** for the SPOC Remark column. All three are required.
 
-**Bulk submit fails with "Bulk submit needs the updated Apps Script (v3)"**
-- The HTML is on v3 but the Apps Script is still on v2. Single-line submissions keep working in the meantime. Update `Code.gs` and redeploy as a **New version** (see the upgrade section below), then check `SCRIPT_URL?action=version`.
+**Every submission fails with just "Submission failed" (no details)**
+- Open `SCRIPT_URL?action=version`. If it shows `"GrayQuest auto-send is live"`, the form's deployment is running `AUTO MAIL.gs`'s `doPost` instead of the form's. Fix: **Deploy → Manage deployments** → select the deployment whose ID starts with `AKfycbyFONd` → pencil → Version → **Version 4 (May 7, 2026)** → **Deploy**. The link should then show `"Unknown action: version"` (old Code.gs) and the form works again.
+
+**"X of N saved — rest not submitted"**
+- Bulk on an older Code.gs sends lines one by one and stopped at a failing line. The saved lines were removed from the form. Fix the remaining line(s) and submit again.
 
 **"Line N: …" error on submit**
 - The script checks every line before saving anything. Fix line N and submit again. Nothing from that attempt was saved.
@@ -177,9 +187,20 @@ The script only writes columns 1–13 (A–M). Columns the finance team added to
 
 ---
 
+## Known issue: AUTO MAIL.gs
+
+The Apps Script project has two files: `Code.gs` (form backend) and `AUTO MAIL.gs` (mail sending, driven by the Send Mail / Mail Status columns). `AUTO MAIL.gs` defines its own `doGet` (`"GrayQuest auto-send is live"`) and `doPost`. Apps Script keeps only one function per name across all files, and the later file wins. So any **new version** of the project serves AUTO MAIL's handlers on every web-app URL, including the form's.
+
+Current safe state:
+- Form deployment `AKfycbyFONd…` → **Version 4 (May 7, 2026)**: form works, bulk goes line by line.
+- Don't delete `AUTO MAIL.gs`. The mail flow depends on it.
+- Don't deploy a new version to `AKfycbyFONd…` until the two `doGet`/`doPost` are merged into one router that serves both. Once that is done, deploy Code.gs v3 and bulk switches to one all-or-nothing request automatically. No HTML change is needed.
+
 ## Upgrading an existing deployment (v2 → v3)
 
-Update in this order: **Apps Script first, then GitHub**. If the HTML goes live first, single-line submissions still work and bulk shows a clear "needs the updated Apps Script" message until the script is updated. Nothing breaks either way.
+> Blocked for now, see **Known issue: AUTO MAIL.gs** above. The form already does bulk without this upgrade.
+
+Update in this order: **Apps Script first, then GitHub**. Nothing breaks either way: the HTML checks `?action=version` and uses one-by-one submission on older scripts.
 
 **A. Apps Script (Code.gs)**
 1. Open the sheet → **Extensions → Apps Script**.
